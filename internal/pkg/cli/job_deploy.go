@@ -33,16 +33,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type deployJobVars struct {
-	appName      string
-	name         string
-	envName      string
-	imageTag     string
-	resourceTags map[string]string
-}
-
 type deployJobOpts struct {
-	deployJobVars
+	deployWkldVars
 
 	store              store
 	ws                 wsJobDirReader
@@ -54,6 +46,7 @@ type deployJobOpts struct {
 	imageBuilderPusher imageBuilderPusher
 	sessProvider       sessionProvider
 	s3                 artifactUploader
+	envUpgradeCmd      actionCommand
 
 	spinner progress
 	sel     wsSelector
@@ -65,7 +58,7 @@ type deployJobOpts struct {
 	buildRequired     bool
 }
 
-func newJobDeployOpts(vars deployJobVars) (*deployJobOpts, error) {
+func newJobDeployOpts(vars deployWkldVars) (*deployJobOpts, error) {
 	store, err := config.NewStore()
 	if err != nil {
 		return nil, fmt.Errorf("new config store: %w", err)
@@ -80,7 +73,7 @@ func newJobDeployOpts(vars deployJobVars) (*deployJobOpts, error) {
 		return nil, err
 	}
 	return &deployJobOpts{
-		deployJobVars: vars,
+		deployWkldVars: vars,
 
 		store:        store,
 		ws:           ws,
@@ -149,6 +142,10 @@ func (o *deployJobOpts) Execute() error {
 
 	if err := o.configureClients(); err != nil {
 		return err
+	}
+
+	if err := o.envUpgradeCmd.Execute(); err != nil {
+		return fmt.Errorf(`execute "env upgrade --app %s --name %s": %v`, o.appName, o.targetEnvironment.Name, err)
 	}
 
 	if err := o.configureContainerImage(); err != nil {
@@ -225,6 +222,15 @@ func (o *deployJobOpts) configureClients() error {
 		return fmt.Errorf("create default session: %w", err)
 	}
 	o.appCFN = cloudformation.New(defaultSess)
+
+	cmd, err := newEnvUpgradeOpts(envUpgradeVars{
+		appName: o.appName,
+		name:    o.targetEnvironment.Name,
+	})
+	if err != nil {
+		return fmt.Errorf("new env upgrade command: %v", err)
+	}
+	o.envUpgradeCmd = cmd
 	return nil
 }
 
@@ -272,10 +278,10 @@ func (o *deployJobOpts) deployJob(addonsURL string) error {
 		),
 	)
 	if err := o.jobCFN.DeployService(conf, awscloudformation.WithRoleARN(o.targetEnvironment.ExecutionRoleARN)); err != nil {
-		o.spinner.Stop(log.Serrorf("Failed to deploy job.\n"))
+		o.spinner.Stop(log.Serrorf("Failed to deploy job.\n\n"))
 		return fmt.Errorf("deploy job: %w", err)
 	}
-	o.spinner.Stop("\n")
+	o.spinner.Stop("\n\n")
 	log.Successf("Deployed %s.\n", color.HighlightUserInput(o.name))
 	return nil
 }
@@ -396,7 +402,7 @@ func (o *deployJobOpts) askEnvName() error {
 
 // buildJobDeployCmd builds the `job deploy` subcommand.
 func buildJobDeployCmd() *cobra.Command {
-	vars := deployJobVars{}
+	vars := deployWkldVars{}
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploys a job to an environment.",

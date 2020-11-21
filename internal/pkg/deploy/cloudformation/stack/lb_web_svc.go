@@ -18,6 +18,7 @@ import (
 const (
 	lbWebSvcRulePriorityGeneratorPath = "custom-resources/alb-rule-priority-generator.js"
 	desiredCountGeneratorPath         = "custom-resources/desired-count-delegation.js"
+	envControllerPath                 = "custom-resources/env-controller.js"
 )
 
 // Parameter logical IDs for a load balanced web service.
@@ -25,7 +26,6 @@ const (
 	LBWebServiceHTTPSParamKey           = "HTTPSEnabled"
 	LBWebServiceContainerPortParamKey   = "ContainerPort"
 	LBWebServiceRulePathParamKey        = "RulePath"
-	LBWebServiceHealthCheckPathParamKey = "HealthCheckPath"
 	LBWebServiceTargetContainerParamKey = "TargetContainer"
 	LBWebServiceTargetPortParamKey      = "TargetPort"
 	LBWebServiceStickinessParamKey      = "Stickiness"
@@ -96,6 +96,10 @@ func (s *LoadBalancedWebService) Template() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read desired count lambda: %w", err)
 	}
+	envControllerLambda, err := s.parser.Read(envControllerPath)
+	if err != nil {
+		return "", fmt.Errorf("read env controller lambda: %w", err)
+	}
 	outputs, err := s.addonsOutputs()
 	if err != nil {
 		return "", err
@@ -109,14 +113,17 @@ func (s *LoadBalancedWebService) Template() (string, error) {
 		return "", fmt.Errorf("convert the Auto Scaling configuration for service %s: %w", s.name, err)
 	}
 	content, err := s.parser.ParseLoadBalancedWebService(template.WorkloadOpts{
-		Variables:          s.manifest.Variables,
-		Secrets:            s.manifest.Secrets,
-		NestedStack:        outputs,
-		Sidecars:           sidecars,
-		LogConfig:          s.manifest.LogConfigOpts(),
-		Autoscaling:        autoscaling,
-		RulePriorityLambda: rulePriorityLambda.String(),
-		DesiredCountLambda: desiredCountLambda.String(),
+		Variables:           s.manifest.Variables,
+		Secrets:             s.manifest.Secrets,
+		NestedStack:         outputs,
+		Sidecars:            sidecars,
+		LogConfig:           s.manifest.LogConfigOpts(),
+		Autoscaling:         autoscaling,
+		HTTPHealthCheck:     s.manifest.HealthCheck.HTTPHealthCheckOpts(),
+		AllowedSourceIps:    s.manifest.AllowedSourceIps,
+		RulePriorityLambda:  rulePriorityLambda.String(),
+		DesiredCountLambda:  desiredCountLambda.String(),
+		EnvControllerLambda: envControllerLambda.String(),
 	})
 	if err != nil {
 		return "", err
@@ -130,6 +137,9 @@ func (s *LoadBalancedWebService) loadBalancerTarget() (targetContainer *string, 
 	// Route load balancer traffic to main container by default.
 	targetContainer = aws.String(containerName)
 	targetPort = aws.String(containerPort)
+	if s.manifest.TargetContainer == nil && s.manifest.TargetContainerCamelCase != nil {
+		s.manifest.TargetContainer = s.manifest.TargetContainerCamelCase
+	}
 	mftTargetContainer := s.manifest.TargetContainer
 	if mftTargetContainer != nil {
 		sidecar, ok := s.manifest.Sidecars[*mftTargetContainer]
@@ -161,10 +171,6 @@ func (s *LoadBalancedWebService) Parameters() ([]*cloudformation.Parameter, erro
 		{
 			ParameterKey:   aws.String(LBWebServiceRulePathParamKey),
 			ParameterValue: s.manifest.Path,
-		},
-		{
-			ParameterKey:   aws.String(LBWebServiceHealthCheckPathParamKey),
-			ParameterValue: s.manifest.HealthCheckPath,
 		},
 		{
 			ParameterKey:   aws.String(LBWebServiceHTTPSParamKey),

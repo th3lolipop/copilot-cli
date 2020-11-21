@@ -14,8 +14,8 @@ image:
   port: 80
 
 http:
-  # Requests to this path will be forwarded to your service. 
-  # To match all requests you can use the "/" path. 
+  # Requests to this path will be forwarded to your service.
+  # To match all requests you can use the "/" path.
   path: '/'
 
   # You can specify a custom health check path. The default is "/"
@@ -50,7 +50,7 @@ The name of your service.
 <div class="separator"></div>
 
 <a id="type" href="#type" class="field">`type`</a> <span class="type">String</span>  
-The architecture type for your service. A [Load balanced web service](../concepts/services.md#load-balanced-web-service) is an internet-facing service that's behind a load balancer, orchestrated by Amazon ECS on AWS Fargate.  
+The architecture type for your service. A [Load Balanced Web Service](../concepts/services.md#load-balanced-web-service) is an internet-facing service that's behind a load balancer, orchestrated by Amazon ECS on AWS Fargate.  
 
 <div class="separator"></div>
 
@@ -63,7 +63,7 @@ If you specify a string, Copilot interprets it as the path to your Dockerfile. I
 image:
   build: path/to/dockerfile
 ```
-will result in the following call to docker build: `$ docker build --file path/to/dockerfile path/to` 
+will result in the following call to docker build: `$ docker build --file path/to/dockerfile path/to`
 
 You can also specify build as a map:
 ```yaml
@@ -77,11 +77,12 @@ image:
     args:
       key: value
 ```
-In this case, copilot will use the context directory you specified and convert the key-value pairs under args to --build-arg overrides. The equivalent docker build call will be: `$ docker build --file path/to/dockerfile --target build-stage --cache-from image:tag --build-arg key=value context/dir`.
+In this case, Copilot will use the context directory you specified and convert the key-value pairs under args to --build-arg overrides. The equivalent docker build call will be:  
+`$ docker build --file path/to/dockerfile --target build-stage --cache-from image:tag --build-arg key=value context/dir`.
 
 You can omit fields and Copilot will do its best to understand what you mean. For example, if you specify `context` but not `dockerfile`, Copilot will run Docker in the context directory and assume that your Dockerfile is named "Dockerfile." If you specify `dockerfile` but no `context`, Copilot assumes you want to run Docker in the directory that contains `dockerfile`.
- 
-All paths are relative to your workspace root. 
+
+All paths are relative to your workspace root.
 
 <span class="parent-field">image.</span><a id="image-location" href="#image-location" class="field">`location`</a> <span class="type">String</span>  
 Instead of building a container from a Dockerfile, you can specify an existing image name. Mutually exclusive with [`image.build`](#image-build).    
@@ -98,11 +99,47 @@ The http section contains parameters related to integrating your service with an
 <span class="parent-field">http.</span><a id="http-path" href="#http-path" class="field">`path`</a> <span class="type">String</span>  
 Requests to this path will be forwarded to your service. Each Load Balanced Web Service should listen on a unique path.
 
-<span class="parent-field">http.</span><a id="http-healthcheck" href="#http-healthcheck" class="field">`healthcheck`</a> <span class="type">String</span>  
-Path exposed in your container to handle target group health check requests.  
+<span class="parent-field">http.</span><a id="http-healthcheck" href="#http-healthcheck" class="field">`healthcheck`</a> <span class="type">String or Map</span>  
+If you specify a string, Copilot interprets it as the path exposed in your container to handle target group health check requests. The default is "/".
+```yaml
+http:
+  healthcheck: '/'
+```
+You can also specify healthcheck as a map:
+```yaml
+http:
+  healthcheck:
+    path: '/'
+    healthy_threshold: 3
+    unhealthy_threshold: 2
+    interval: 15s
+    timeout: 10s
+```
+
+<span class="parent-field">http.healthcheck.</span><a id="http-healthcheck-healthy-threshold" href="#http-healthcheck-healthy-threshold" class="field">`healthy_threshold`</a> <span class="type">Integer</span>  
+The number of consecutive health check successes required before considering an unhealthy target healthy. The Copilot default is 2. Range: 2-10.
+
+<span class="parent-field">http.healthcheck.</span><a id="http-healthcheck-unhealthy-threshold" href="#http-healthcheck-unhealthy-threshold" class="field">`unhealthy_threshold`</a> <span class="type">Integer</span>  
+The number of consecutive health check failures required before considering a target unhealthy. The Copilot default is 2. Range: 2-10.
+
+<span class="parent-field">http.healthcheck.</span><a id="http-healthcheck-interval" href="#http-healthcheck-interval" class="field">`interval`</a> <span class="type">Duration</span>  
+The approximate amount of time, in seconds, between health checks of an individual target. The Copilot default is 10s. Range: 5s–300s.
+
+<span class="parent-field">http.healthcheck.</span><a id="http-healthcheck-timeout" href="#http-healthcheck-timeout" class="field">`timeout`</a> <span class="type">Duration</span>  
+The amount of time, in seconds, during which no response from a target means a failed health check. The Copilot default is 5s. Range 5s-300s.
+
+<span class="parent-field">http.</span><a id="http-target-container" href="#http-target-container" class="field">`target_container`</a> <span class="type">String</span>  
+A sidecar container that takes the place of a service container.
 
 <span class="parent-field">http.</span><a id="http-stickiness" href="#http-stickiness" class="field">`stickiness`</a> <span class="type">Boolean</span>  
 Indicates whether sticky sessions are enabled.
+
+<span class="parent-field">http.</span><a id="http-allowed-source-ips" href="#http-allowed-source-ips" class="field">`allowed_source_ips`</a> <span class="type">Array of Strings</span>  
+CIDR IP addresses permitted to access your service.
+```yaml
+http:
+  allowed_source_ips: ["192.0.2.0/24", "198.51.100.10/32"]
+```
 
 <div class="separator"></div>
 
@@ -129,6 +166,8 @@ count:
   range: 1-10
   cpu_percentage: 70
   memory_percentage: 80
+  requests: 10000
+  response_time: 2s
 ```
 
 
@@ -141,17 +180,23 @@ Scale up or down based on the average CPU your service should maintain.
 <span class="parent-field">count.</span><a id="count-memory-percentage" href="#count-memory-percentage" class="field">`memory_percentage`</a> <span class="type">Integer</span>  
 Scale up or down based on the average memory your service should maintain.  
 
+<span class="parent-field">count.</span><a id="requests" href="#count-requests" class="field">`requests`</a> <span class="type">Integer</span>  
+Scale up or down based on the request count handled per tasks.
+
+<span class="parent-field">count.</span><a id="response-time" href="#count-response-time" class="field">`response_time`</a> <span class="type">Duration</span>  
+Scale up or down based on the service average response time.
+
 <div class="separator"></div>
 
 <a id="variables" href="#variables" class="field">`variables`</a> <span class="type">Map</span>   
-Key-value pairs that represents environment variables that will be passed to your service. Copilot will include a number of environment variables by default for you.
+Key-value pairs that represent environment variables that will be passed to your service. Copilot will include a number of environment variables by default for you.
 
 <div class="separator"></div>
 
 <a id="secrets" href="#secrets" class="field">`secrets`</a> <span class="type">Map</span>   
-Key-value pairs that represents secret values from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) that will passed to your service as environment variables securely. 
+Key-value pairs that represent secret values from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) that will be securely passed to your service as environment variables.
 
 <div class="separator"></div>
 
 <a id="environments" href="#environments" class="field">`environments`</a> <span class="type">Map</span>  
-The environment section lets you overwrite any value in your manifest based on the environment you're in. In the example manifest above, we're overriding the count parameter so that we can run 2 copies of our service in our prod environment.
+The environment section lets you override any value in your manifest based on the environment you're in. In the example manifest above, we're overriding the count parameter so that we can run 2 copies of our service in our prod environment.

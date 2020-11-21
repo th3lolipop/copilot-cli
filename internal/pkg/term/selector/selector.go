@@ -32,6 +32,8 @@ const (
 )
 
 const (
+	// dockerfilePromptUseCustom is the option for using Dockerfile with custom path.
+	dockerfilePromptUseCustom = "Enter custom path for your Dockerfile"
 	// DockerfilePromptUseImage is the option for using existing image instead of Dockerfile.
 	DockerfilePromptUseImage = "Use an existing image instead"
 
@@ -83,6 +85,7 @@ type AppEnvLister interface {
 type ConfigWorkloadLister interface {
 	ListServices(appName string) ([]*config.Workload, error)
 	ListJobs(appName string) ([]*config.Workload, error)
+	ListWorkloads(appName string) ([]*config.Workload, error)
 }
 
 // ConfigLister wraps config store listing methods.
@@ -95,6 +98,7 @@ type ConfigLister interface {
 type WsWorkloadLister interface {
 	ServiceNames() ([]string, error)
 	JobNames() ([]string, error)
+	WorkloadNames() ([]string, error)
 }
 
 // WorkspaceRetriever wraps methods to get workload names, app names, and Dockerfiles from the workspace.
@@ -249,7 +253,12 @@ func (s *DeploySelect) DeployedService(prompt, help string, app string, opts ...
 	var deployedSvc DeployedService
 	if len(svcEnvNames) == 1 {
 		deployedSvc = svcEnvs[svcEnvNames[0]]
-		log.Infof("Only found one deployed service %s in environment %s\n", color.HighlightUserInput(deployedSvc.Svc), color.HighlightUserInput(deployedSvc.Env))
+		if s.svc == "" && s.env == "" {
+			log.Infof("Found only one deployed service %s in environment %s\n", color.HighlightUserInput(deployedSvc.Svc), color.HighlightUserInput(deployedSvc.Env))
+		}
+		if (s.svc != "") != (s.env != "") {
+			log.Infof("Service %s found in environment %s\n", color.HighlightUserInput(deployedSvc.Svc), color.HighlightUserInput(deployedSvc.Env))
+		}
 		return &deployedSvc, nil
 	}
 	svcEnvName, err := s.prompt.SelectOne(
@@ -323,6 +332,35 @@ func (s *WorkspaceSelect) Job(msg, help string) (string, error) {
 		return "", fmt.Errorf("select job: %w", err)
 	}
 	return selectedJobName, nil
+}
+
+// Workload fetches all jobs and services in an app and prompts the user to select one.
+func (s *WorkspaceSelect) Workload(msg, help string) (wl string, err error) {
+	summary, err := s.ws.Summary()
+	if err != nil {
+		return "", fmt.Errorf("read workspace summary: %w", err)
+	}
+	wsWlNames, err := s.retrieveWorkspaceWorkloads()
+	if err != nil {
+		return "", fmt.Errorf("retrieve jobs and services from workspace: %w", err)
+	}
+	storeWls, err := s.Select.config.ListWorkloads(summary.Application)
+	if err != nil {
+		return "", fmt.Errorf("retrieve jobs and services from store: %w", err)
+	}
+	wlNames := filterWlsByName(storeWls, wsWlNames)
+	if len(wlNames) == 0 {
+		return "", errors.New("no jobs or services found")
+	}
+	if len(wlNames) == 1 {
+		log.Infof("Only found one workload, defaulting to: %s\n", color.HighlightUserInput(wlNames[0]))
+		return wlNames[0], nil
+	}
+	selectedWlName, err := s.prompt.SelectOne(msg, help, wlNames, prompt.WithFinalMessage("Name: "))
+	if err != nil {
+		return "", fmt.Errorf("select workload: %w", err)
+	}
+	return selectedWlName, nil
 }
 
 func filterWlsByName(wls []*config.Workload, wantedNames []string) []string {
@@ -467,31 +505,35 @@ func (s *WorkspaceSelect) retrieveWorkspaceJobs() ([]string, error) {
 	return localJobNames, nil
 }
 
+func (s *WorkspaceSelect) retrieveWorkspaceWorkloads() ([]string, error) {
+	localWlNames, err := s.ws.WorkloadNames()
+	if err != nil {
+		return nil, err
+	}
+	return localWlNames, nil
+}
+
 // Dockerfile asks the user to select from a list of Dockerfiles in the current
 // directory or one level down. If no dockerfiles are found, it asks for a custom path.
 func (s *WorkspaceSelect) Dockerfile(selPrompt, notFoundPrompt, selHelp, notFoundHelp string, pathValidator prompt.ValidatorFunc) (string, error) {
 	dockerfiles, err := s.ws.ListDockerfiles()
-	// If Dockerfiles are found in the current directory or subdirectory one level down, ask the user to select one.
+	if err != nil {
+		return "", fmt.Errorf("list Dockerfiles: %w", err)
+	}
 	var sel string
-	if err == nil {
-		dockerfiles = append(dockerfiles, DockerfilePromptUseImage)
-		sel, err = s.prompt.SelectOne(
-			selPrompt,
-			selHelp,
-			dockerfiles,
-			prompt.WithFinalMessage("Dockerfile:"),
-		)
-		if err != nil {
-			return "", fmt.Errorf("select Dockerfile: %w", err)
-		}
+	dockerfiles = append(dockerfiles, []string{dockerfilePromptUseCustom, DockerfilePromptUseImage}...)
+	sel, err = s.prompt.SelectOne(
+		selPrompt,
+		selHelp,
+		dockerfiles,
+		prompt.WithFinalMessage("Dockerfile:"),
+	)
+	if err != nil {
+		return "", fmt.Errorf("select Dockerfile: %w", err)
+	}
+	if sel != dockerfilePromptUseCustom {
 		return sel, nil
 	}
-
-	var notExistErr *workspace.ErrDockerfileNotFound
-	if !errors.As(err, &notExistErr) {
-		return "", err
-	}
-	// If no Dockerfiles were found, prompt user for custom path.
 	sel, err = s.prompt.Get(
 		notFoundPrompt,
 		notFoundHelp,

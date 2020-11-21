@@ -6,9 +6,10 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
 	"path/filepath"
 	"strings"
+
+	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/aws/copilot-cli/internal/pkg/deploy"
 
@@ -35,7 +36,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type deploySvcVars struct {
+type deployWkldVars struct {
 	appName      string
 	name         string
 	envName      string
@@ -44,7 +45,7 @@ type deploySvcVars struct {
 }
 
 type deploySvcOpts struct {
-	deploySvcVars
+	deployWkldVars
 
 	store              store
 	ws                 wsSvcDirReader
@@ -56,6 +57,7 @@ type deploySvcOpts struct {
 	appCFN             appResourcesGetter
 	svcCFN             cloudformation.CloudFormation
 	sessProvider       sessionProvider
+	envUpgradeCmd      actionCommand
 
 	spinner progress
 	sel     wsSelector
@@ -68,7 +70,7 @@ type deploySvcOpts struct {
 	buildRequired     bool
 }
 
-func newSvcDeployOpts(vars deploySvcVars) (*deploySvcOpts, error) {
+func newSvcDeployOpts(vars deployWkldVars) (*deploySvcOpts, error) {
 	store, err := config.NewStore()
 	if err != nil {
 		return nil, fmt.Errorf("new config store: %w", err)
@@ -80,7 +82,7 @@ func newSvcDeployOpts(vars deploySvcVars) (*deploySvcOpts, error) {
 	}
 	prompter := prompt.New()
 	return &deploySvcOpts{
-		deploySvcVars: vars,
+		deployWkldVars: vars,
 
 		store:        store,
 		ws:           ws,
@@ -149,6 +151,10 @@ func (o *deploySvcOpts) Execute() error {
 
 	if err := o.configureClients(); err != nil {
 		return err
+	}
+
+	if err := o.envUpgradeCmd.Execute(); err != nil {
+		return fmt.Errorf(`execute "env upgrade --app %s --name %s": %v`, o.appName, o.targetEnvironment.Name, err)
 	}
 
 	if err := o.configureContainerImage(); err != nil {
@@ -262,6 +268,15 @@ func (o *deploySvcOpts) configureClients() error {
 		return fmt.Errorf("create default session: %w", err)
 	}
 	o.appCFN = cloudformation.New(defaultSess)
+
+	cmd, err := newEnvUpgradeOpts(envUpgradeVars{
+		appName: o.appName,
+		name:    o.targetEnvironment.Name,
+	})
+	if err != nil {
+		return fmt.Errorf("new env upgrade command: %v", err)
+	}
+	o.envUpgradeCmd = cmd
 	return nil
 }
 
@@ -424,10 +439,10 @@ func (o *deploySvcOpts) deploySvc(addonsURL string) error {
 			color.HighlightUserInput(o.targetEnvironment.Name)))
 
 	if err := o.svcCFN.DeployService(conf, awscloudformation.WithRoleARN(o.targetEnvironment.ExecutionRoleARN)); err != nil {
-		o.spinner.Stop(log.Serrorf("Failed to deploy service.\n"))
+		o.spinner.Stop(log.Serrorf("Failed to deploy service.\n\n"))
 		return fmt.Errorf("deploy service: %w", err)
 	}
-	o.spinner.Stop("\n")
+	o.spinner.Stop("\n\n")
 	return nil
 }
 
@@ -481,7 +496,7 @@ func (o *deploySvcOpts) showSvcURI() error {
 
 // buildSvcDeployCmd builds the `svc deploy` subcommand.
 func buildSvcDeployCmd() *cobra.Command {
-	vars := deploySvcVars{}
+	vars := deployWkldVars{}
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploys a service to an environment.",

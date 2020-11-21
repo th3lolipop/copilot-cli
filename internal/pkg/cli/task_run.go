@@ -10,18 +10,18 @@ import (
 	"path/filepath"
 
 	awscloudformation "github.com/aws/copilot-cli/internal/pkg/aws/cloudformation"
-	"github.com/aws/copilot-cli/internal/pkg/ecslogging"
+	"github.com/aws/copilot-cli/internal/pkg/logging"
 	"github.com/aws/copilot-cli/internal/pkg/term/prompt"
 
 	"github.com/aws/copilot-cli/internal/pkg/aws/ec2"
 	"github.com/aws/copilot-cli/internal/pkg/aws/ecr"
-	"github.com/aws/copilot-cli/internal/pkg/aws/ecs"
-	"github.com/aws/copilot-cli/internal/pkg/aws/resourcegroups"
+	awsecs "github.com/aws/copilot-cli/internal/pkg/aws/ecs"
 	"github.com/aws/copilot-cli/internal/pkg/aws/sessions"
 	"github.com/aws/copilot-cli/internal/pkg/config"
 	"github.com/aws/copilot-cli/internal/pkg/deploy"
 	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation"
 	"github.com/aws/copilot-cli/internal/pkg/docker"
+	"github.com/aws/copilot-cli/internal/pkg/ecs"
 	"github.com/aws/copilot-cli/internal/pkg/repository"
 	"github.com/aws/copilot-cli/internal/pkg/task"
 	"github.com/aws/copilot-cli/internal/pkg/term/color"
@@ -136,7 +136,7 @@ func newTaskRunOpts(vars runTaskVars) (*runTaskOpts, error) {
 	opts.configureRuntimeOpts = func() error {
 		opts.runner = opts.configureRunner()
 		opts.deployer = cloudformation.New(opts.sess)
-		opts.defaultClusterGetter = ecs.New(opts.sess)
+		opts.defaultClusterGetter = awsecs.New(opts.sess)
 		return nil
 	}
 
@@ -152,14 +152,14 @@ func newTaskRunOpts(vars runTaskVars) (*runTaskOpts, error) {
 	}
 
 	opts.configureEventsWriter = func(tasks []*task.Task) {
-		opts.eventsWriter = ecslogging.NewTaskClient(opts.sess, opts.groupName, tasks)
+		opts.eventsWriter = logging.NewTaskClient(opts.sess, opts.groupName, tasks)
 	}
 	return &opts, nil
 }
 
 func (o *runTaskOpts) configureRunner() taskRunner {
 	vpcGetter := ec2.New(o.sess)
-	ecsService := ecs.New(o.sess)
+	ecsService := awsecs.New(o.sess)
 
 	if o.env != "" {
 		return &task.EnvRunner{
@@ -170,7 +170,7 @@ func (o *runTaskOpts) configureRunner() taskRunner {
 			Env: o.env,
 
 			VPCGetter:     vpcGetter,
-			ClusterGetter: resourcegroups.New(o.sess),
+			ClusterGetter: ecs.New(o.sess),
 			Starter:       ecsService,
 		}
 	}
@@ -438,10 +438,10 @@ func (o *runTaskOpts) runTask() ([]*task.Task, error) {
 	o.spinner.Start(fmt.Sprintf("Waiting for %s to be running for %s.", english.Plural(o.count, "task", ""), o.groupName))
 	tasks, err := o.runner.Run()
 	if err != nil {
-		o.spinner.Stop(log.Serrorf("Failed to run %s.\n", o.groupName))
+		o.spinner.Stop(log.Serrorf("Failed to run %s.\n\n", o.groupName))
 		return nil, fmt.Errorf("run task %s: %w", o.groupName, err)
 	}
-	o.spinner.Stop(log.Ssuccessf("%s %s %s running.\n", english.PluralWord(o.count, "Task", ""), o.groupName, english.PluralWord(o.count, "is", "are")))
+	o.spinner.Stop(log.Ssuccessf("%s %s %s running.\n\n", english.PluralWord(o.count, "Task", ""), o.groupName, english.PluralWord(o.count, "is", "are")))
 	return tasks, nil
 }
 
@@ -465,20 +465,20 @@ func (o *runTaskOpts) buildAndPushImage() error {
 func (o *runTaskOpts) deployTaskResources() error {
 	o.spinner.Start(fmt.Sprintf("Provisioning resources and permissions for task %s.", color.HighlightUserInput(o.groupName)))
 	if err := o.deploy(); err != nil {
-		o.spinner.Stop(log.Serrorln("Failed to provision task resources."))
+		o.spinner.Stop(log.Serror("Failed to provision task resources.\n\n"))
 		return fmt.Errorf("provision resources for task %s: %w", o.groupName, err)
 	}
-	o.spinner.Stop(log.Ssuccessln("Successfully provisioned task resources."))
+	o.spinner.Stop(log.Ssuccess("Successfully provisioned task resources.\n\n"))
 	return nil
 }
 
 func (o *runTaskOpts) updateTaskResources() error {
 	o.spinner.Start(fmt.Sprintf("Updating image to task %s.", color.HighlightUserInput(o.groupName)))
 	if err := o.deploy(); err != nil {
-		o.spinner.Stop(log.Serrorln("Failed to update task resources."))
+		o.spinner.Stop(log.Serror("Failed to update task resources.\n\n"))
 		return fmt.Errorf("update resources for task %s: %w", o.groupName, err)
 	}
-	o.spinner.Stop(log.Ssuccessln("Successfully updated image to task."))
+	o.spinner.Stop(log.Ssuccess("Successfully updated image to task.\n\n"))
 	return nil
 }
 

@@ -48,7 +48,7 @@ The name of your service.
 <div class="separator"></div>
 
 <a id="type" href="#type" class="field">`type`</a> <span class="type">String</span>  
-The architecture type for your service. [Backend services](../concepts/services.md#backend-service) is not reachable from the internet, but can be reached with [service discovery](../developing/service-discovery.md) from your other services.
+The architecture type for your service. [Backend Services](../concepts/services.md#backend-service) are not reachable from the internet, but can be reached with [service discovery](../developing/service-discovery.md) from your other services.
 
 <div class="separator"></div>
 
@@ -61,7 +61,7 @@ If you specify a string, Copilot interprets it as the path to your Dockerfile. I
 image:
   build: path/to/dockerfile
 ```
-will result in the following call to docker build: `$ docker build --file path/to/dockerfile path/to` 
+will result in the following call to docker build: `$ docker build --file path/to/dockerfile path/to`
 
 You can also specify build as a map:
 ```yaml
@@ -75,11 +75,12 @@ image:
     args:
       key: value
 ```
-In this case, copilot will use the context directory you specified and convert the key-value pairs under args to --build-arg overrides. The equivalent docker build call will be: `$ docker build --file path/to/dockerfile --target build-stage --cache-from image:tag --build-arg key=value context/dir`.
+In this case, copilot will use the context directory you specified and convert the key-value pairs under args to --build-arg overrides. The equivalent docker build call will be:  
+`$ docker build --file path/to/dockerfile --target build-stage --cache-from image:tag --build-arg key=value context/dir`.
 
 You can omit fields and Copilot will do its best to understand what you mean. For example, if you specify `context` but not `dockerfile`, Copilot will run Docker in the context directory and assume that your Dockerfile is named "Dockerfile." If you specify `dockerfile` but no `context`, Copilot assumes you want to run Docker in the directory that contains `dockerfile`.
- 
-All paths are relative to your workspace root. 
+
+All paths are relative to your workspace root.
 
 <span class="parent-field">image.</span><a id="image-location" href="#image-location" class="field">`location`</a> <span class="type">String</span>  
 Instead of building a container from a Dockerfile, you can specify an existing image name. Mutually exclusive with [`image.build`](#image-build).    
@@ -87,23 +88,23 @@ The `location` field follows the same definition as the [`image` parameter](http
 
 <span class="parent-field">image.</span><a id="image-port" href="#image-port" class="field">`port`</a> <span class="type">Integer</span>  
 The port exposed in your Dockerfile. Copilot should parse this value for you from your `EXPOSE` instruction.  
-If you don't need your backend service to accept requests from other services you can omit this field.
+If you don't need your Backend Service to accept requests from other services, you can omit this field.
 
 <span class="parent-field">image.</span><a id="image-healthcheck" href="#image-healthcheck" class="field">`healthcheck`</a> <span class="type">Map</span>  
 Optional configuration for container health checks.
 
 <span class="parent-field">image.healthcheck.</span><a id="image-healthcheck-cmd" href="#image-healthcheck-cmd" class="field">`command`</a> <span class="type">Array of Strings</span>  
 The command to run to determine if the container is healthy.  
-The string array can start with `CMD` to execute the command arguments directly, or `CMD-SHELL` to run the command with the container's default shell. 
+The string array can start with `CMD` to execute the command arguments directly, or `CMD-SHELL` to run the command with the container's default shell.
 
 <span class="parent-field">image.healthcheck.</span><a id="image-healthcheck-interval" href="#image-healthcheck-interval" class="field">`interval`</a> <span class="type">Duration</span>  
-Time period between healthchecks in seconds. Default is 10s.
+Time period between health checks, in seconds. Default is 10s.
 
 <span class="parent-field">image.healthcheck.</span><a id="image-healthcheck-retries" href="#image-healthcheck-retries" class="field">`retries`</a> <span class="type">Integer</span>  
 Number of times to retry before container is deemed unhealthy. Default is 2.
 
 <span class="parent-field">image.healthcheck.</span><a id="image-healthcheck-timeout" href="#image-healthcheck-timeout" class="field">`timeout`</a> <span class="type">Duration</span>  
-How long to wait before considering the healthcheck failed in seconds. Default is 5s.
+How long to wait before considering the health check failed, in seconds. Default is 5s.
 
 <span class="parent-field">image.healthcheck.</span><a id="image-healthcheck-start-period" href="#image-healthcheck-start-period" class="field">`start_period`</a> <span class="type">Duration</span>  
 Grace period within which to provide containers time to bootstrap before failed health checks count towards the maximum number of retries. Default is 0s.
@@ -148,14 +149,14 @@ Scale up or down based on the average memory your service should maintain.
 <div class="separator"></div>
 
 <a id="variables" href="#variables" class="field">`variables`</a> <span class="type">Map</span>   
-Key-value pairs that represents environment variables that will be passed to your service. Copilot will include a number of environment variables by default for you.
+Key-value pairs that represent environment variables that will be passed to your service. Copilot will include a number of environment variables by default for you.
 
 <div class="separator"></div>
 
 <a id="secrets" href="#secrets" class="field">`secrets`</a> <span class="type">Map</span>   
-Key-value pairs that represents secret values from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) that will passed to your service as environment variables securely. 
+Key-value pairs that represent secret values from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) that will be securely passed to your service as environment variables.
 
 <div class="separator"></div>
 
 <a id="environments" href="#environments" class="field">`environments`</a> <span class="type">Map</span>  
-The environment section lets you overwrite any value in your manifest based on the environment you're in. In the example manifest above, we're overriding the count parameter so that we can run 2 copies of our service in our prod environment.
+The environment section lets you override any value in your manifest based on the environment you're in. In the example manifest above, we're overriding the count parameter so that we can run 2 copies of our service in our prod environment.

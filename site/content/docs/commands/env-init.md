@@ -6,9 +6,9 @@ $ copilot env init [flags]
 ## What does it do?
 `copilot env init` creates a new [environment](../concepts/environments.md) where your services will live.
 
-After you answer the questions, the CLI creates the common infrastructure that's shared between your services such as a VPC, an Application Load Balancer, and an ECS Cluster. Additionally, you can [customize Copilot environment](../concepts/environments.md#customize-your-environment) by either configuring the default environment resources or importing existing resources for your environment.
+After you answer the questions, the CLI creates the common infrastructure that's shared between your services such as a VPC, an Application Load Balancer, and an ECS Cluster. Additionally, you can [customize your Copilot environment](../concepts/environments.md#customize-your-environment) by either configuring the default environment resources or importing existing resources for your environment.
 
-You create environments using a [named profile](../credentials.md#environment-credentials) to specify which AWS Account and Region you'd like the environment to be in.
+You create environments using a [named profile](../credentials.md#environment-credentials) to specify which AWS account and region you'd like the environment to be in.
 
 ## What are the flags?
 Like all commands in the AWS Copilot CLI, if you don't provide required flags, we'll prompt you for all the information we need to get you going. You can skip the prompts by providing information via flags:
@@ -47,7 +47,7 @@ Creates a prod-iad environment using your "prod-admin" AWS profile using existin
 ```bash
 $ copilot env init --name prod-iad --profile prod-admin --prod \
 --import-vpc-id vpc-099c32d2b98cdcf47 \
---import-public-subnets subnet-013e8b691862966cf,subnet -014661ebb7ab8681a \
+--import-public-subnets subnet-013e8b691862966cf,subnet-014661ebb7ab8681a \
 --import-private-subnets subnet-055fafef48fb3c547,subnet-00c9e76f288363e7f
 ```
 

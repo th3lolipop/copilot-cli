@@ -10,14 +10,15 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/copilot-cli/internal/pkg/aws/cloudformation"
 	"github.com/aws/copilot-cli/internal/pkg/aws/codepipeline"
+	"github.com/aws/copilot-cli/internal/pkg/aws/ecs"
 	"github.com/aws/copilot-cli/internal/pkg/config"
 	"github.com/aws/copilot-cli/internal/pkg/deploy"
 	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation/stack"
 	"github.com/aws/copilot-cli/internal/pkg/describe"
 	"github.com/aws/copilot-cli/internal/pkg/docker"
 	"github.com/aws/copilot-cli/internal/pkg/docker/dockerfile"
-	"github.com/aws/copilot-cli/internal/pkg/ecslogging"
 	"github.com/aws/copilot-cli/internal/pkg/initialize"
+	"github.com/aws/copilot-cli/internal/pkg/logging"
 	"github.com/aws/copilot-cli/internal/pkg/repository"
 	"github.com/aws/copilot-cli/internal/pkg/task"
 	"github.com/aws/copilot-cli/internal/pkg/term/command"
@@ -55,6 +56,11 @@ type jobStore interface {
 	GetJob(appName, jobName string) (*config.Workload, error)
 	ListJobs(appName string) ([]*config.Workload, error)
 	DeleteJob(appName, jobName string) error
+}
+
+type wlStore interface {
+	ListWorkloads(appName string) ([]*config.Workload, error)
+	GetWorkload(appName, name string) (*config.Workload, error)
 }
 
 type workloadListWriter interface {
@@ -112,6 +118,7 @@ type store interface {
 	environmentStore
 	serviceStore
 	jobStore
+	wlStore
 }
 
 type deployedEnvironmentLister interface {
@@ -149,7 +156,7 @@ type repositoryService interface {
 }
 
 type logEventsWriter interface {
-	WriteLogEvents(opts ecslogging.WriteLogEventsOpts) error
+	WriteLogEvents(opts logging.WriteLogEventsOpts) error
 }
 
 type templater interface {
@@ -249,9 +256,22 @@ type wsJobReader interface {
 	wsJobLister
 }
 
+type wsWlReader interface {
+	WorkloadNames() ([]string, error)
+}
+
 type wsJobDirReader interface {
 	wsJobReader
-	CopilotDirPath() (string, error)
+	copilotDirGetter
+}
+
+type wsWlDirReader interface {
+	wsJobReader
+	wsSvcReader
+	copilotDirGetter
+	wsWlReader
+	ListDockerfiles() ([]string, error)
+	Summary() (*workspace.Summary, error)
 }
 
 type wsPipelineReader interface {
@@ -266,7 +286,7 @@ type wsAppManager interface {
 
 type wsAddonManager interface {
 	WriteAddon(f encoding.BinaryMarshaler, svc, name string) (string, error)
-	wsSvcReader
+	wsWlReader
 }
 
 type artifactUploader interface {
@@ -366,6 +386,24 @@ type versionGetter interface {
 	Version() (string, error)
 }
 
+type envTemplater interface {
+	EnvironmentTemplate(appName, envName string) (string, error)
+}
+
+type envUpgrader interface {
+	UpgradeEnvironment(in *deploy.CreateEnvironmentInput) error
+}
+
+type legacyEnvUpgrader interface {
+	UpgradeLegacyEnvironment(in *deploy.CreateEnvironmentInput, lbWebServices ...string) error
+	envTemplater
+}
+
+type envTemplateUpgrader interface {
+	envUpgrader
+	legacyEnvUpgrader
+}
+
 type pipelineGetter interface {
 	GetPipeline(pipelineName string) (*codepipeline.Pipeline, error)
 	ListPipelineNamesByTags(tags map[string]string) ([]string, error)
@@ -408,6 +446,7 @@ type wsSelector interface {
 	appEnvSelector
 	Service(prompt, help string) (string, error)
 	Job(prompt, help string) (string, error)
+	Workload(msg, help string) (string, error)
 }
 
 type initJobSelector interface {
@@ -443,4 +482,12 @@ type svcInitializer interface {
 
 type roleDeleter interface {
 	DeleteRole(string) error
+}
+
+type activeWorkloadTasksLister interface {
+	ListActiveWorkloadTasks(app, env, workload string) (clusterARN string, taskARNs []string, err error)
+}
+
+type tasksStopper interface {
+	StopTasks(tasks []string, opts ...ecs.StopTasksOpts) error
 }

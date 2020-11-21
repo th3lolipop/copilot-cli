@@ -56,17 +56,17 @@ https://aws.github.io/copilot-cli/docs/credentials/#environment-credentials`
 	envInitDefaultRegionOption = "us-west-2"
 
 	fmtDeployEnvStart        = "Proposing infrastructure changes for the %s environment."
-	fmtDeployEnvComplete     = "Environment %s already exists in application %s.\n"
-	fmtDeployEnvFailed       = "Failed to accept changes for the %s environment.\n"
+	fmtDeployEnvComplete     = "Environment %s already exists in application %s.\n\n"
+	fmtDeployEnvFailed       = "Failed to accept changes for the %s environment.\n\n"
 	fmtDNSDelegationStart    = "Sharing DNS permissions for this application to account %s."
-	fmtDNSDelegationFailed   = "Failed to grant DNS permissions to account %s.\n"
-	fmtDNSDelegationComplete = "Shared DNS permissions for this application to account %s.\n"
+	fmtDNSDelegationFailed   = "Failed to grant DNS permissions to account %s.\n\n"
+	fmtDNSDelegationComplete = "Shared DNS permissions for this application to account %s.\n\n"
 	fmtStreamEnvStart        = "Creating the infrastructure for the %s environment."
 	fmtStreamEnvFailed       = "Failed to create the infrastructure for the %s environment.\n"
 	fmtStreamEnvComplete     = "Created the infrastructure for the %s environment.\n"
 	fmtAddEnvToAppStart      = "Linking account %s and region %s to application %s."
-	fmtAddEnvToAppFailed     = "Failed to link account %s and region %s to application %s.\n"
-	fmtAddEnvToAppComplete   = "Linked account %s and region %s to application %s.\n"
+	fmtAddEnvToAppFailed     = "Failed to link account %s and region %s to application %s.\n\n"
+	fmtAddEnvToAppComplete   = "Linked account %s and region %s to application %s.\n\n"
 )
 
 var (
@@ -477,6 +477,7 @@ func (o *initEnvOpts) deployEnv(app *config.Application) error {
 		AdditionalTags:           app.Tags,
 		AdjustVPCConfig:          o.adjustVPCConfig(),
 		ImportVPCConfig:          o.importVPCConfig(),
+		Version:                  deploy.LatestEnvTemplateVersion,
 	}
 
 	o.prog.Start(fmt.Sprintf(fmtDeployEnvStart, color.HighlightUserInput(o.name)))
@@ -562,10 +563,6 @@ func (o *initEnvOpts) humanizeEnvironmentEvents(resourceEvents []deploy.Resource
 		textECSCluster: func(event deploy.Resource) bool {
 			return event.Type == "AWS::ECS::Cluster"
 		},
-		textALB: func(event deploy.Resource) bool {
-			return strings.Contains(event.LogicalName, "LoadBalancer") ||
-				strings.Contains(event.Type, "ElasticLoadBalancingV2")
-		},
 	}
 	return termprogress.HumanizeResourceEvents(o.envProgressOrder(), resourceEvents, matcher, defaultResourceCounts)
 }
@@ -574,7 +571,7 @@ func (o *initEnvOpts) envProgressOrder() (order []termprogress.Text) {
 	if !o.importVPC.isSet() {
 		order = append(order, []termprogress.Text{textVPC, textInternetGateway, textPublicSubnets, textPrivateSubnets, textRouteTables}...)
 	}
-	order = append(order, []termprogress.Text{textECSCluster, textALB}...)
+	order = append(order, textECSCluster)
 	return
 }
 

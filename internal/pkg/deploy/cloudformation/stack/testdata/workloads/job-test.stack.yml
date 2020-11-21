@@ -62,10 +62,7 @@ Resources:
             Value: !Sub '${EnvName}'
           - Name: COPILOT_SERVICE_NAME
             Value: !Sub '${WorkloadName}'
-          - Name: COPILOT_LB_DNS
-            Value:
-              Fn::ImportValue:
-                !Sub "${AppName}-${EnvName}-PublicLoadBalancerDNS" 
+          
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -217,6 +214,7 @@ Resources:
                 "PlatformVersion": "LATEST",
                 "Cluster": "${Cluster}",
                 "TaskDefinition": "${TaskDefinition}",
+                "PropagateTags": "TASK_DEFINITION",
                 "Group.$": "$$.Execution.Name",
                 "NetworkConfiguration": {
                   "AwsvpcConfiguration": {
